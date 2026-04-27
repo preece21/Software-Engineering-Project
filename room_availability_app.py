@@ -9,7 +9,7 @@ from dateutil.rrule import rrulestr, rruleset
 
 from config_manager import ConfigManager
 from setup_page import SetupPage
-from Parsing import parse_ics, Event
+from Parsing import parse_ics, Event, fetch_ics_from_url
 
 class RoomAvailabilityApp(QMainWindow):
     def __init__(self):
@@ -20,7 +20,7 @@ class RoomAvailabilityApp(QMainWindow):
         # Load calendar data
         self.config_manager = ConfigManager()
         self.raw_events = self.parse_calendar_events()
-        self.week_start = self.get_display_week_start(self.raw_events)
+        self.week_start = self.get_current_day_start()
         self.week_end = self.week_start + timedelta(days=7)
         self.events = self.expand_recurring_events(self.raw_events, self.week_start, self.week_end)
 
@@ -37,7 +37,7 @@ class RoomAvailabilityApp(QMainWindow):
         top_layout = QHBoxLayout()
         top_layout.setContentsMargins(0, 0, 0, 0)
         top_layout.setSpacing(2)
-        self.week_label = QLabel(f"Showing week starting {self.week_start.date()}")
+        self.week_label = QLabel(f"Showing 7 days starting {self.week_start.date()}")
         self.week_label.setStyleSheet("font-weight: bold; font-size: 12px; margin-bottom: 0px;")
         top_layout.addWidget(self.week_label)
         top_layout.addStretch()
@@ -56,16 +56,16 @@ class RoomAvailabilityApp(QMainWindow):
         self.status_label.setAutoFillBackground(True)
         main_layout.addWidget(self.status_label)
 
-        # Get the Sunday of the current display week
-        sunday = self.week_start
+        # Get the start of the current display period (today)
+        today = self.week_start
 
-        # Create zones for each day of the week (Sunday to Saturday)
+        # Create zones for each day (today + next 6 days)
         self.day_zones = []
-        day_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
         
         for i in range(7):
-            current_date = sunday + timedelta(days=i)
-            day_label = f"{day_names[i]}\n{current_date.strftime('%m/%d')}"
+            current_date = today + timedelta(days=i)
+            day_name = current_date.strftime('%A')  # Full day name (Monday, Tuesday, etc.)
+            day_label = f"{day_name}\n{current_date.strftime('%m/%d')}"
             
             zone = QFrame()
             zone.setFrameStyle(QFrame.Shape.Box)
@@ -117,6 +117,16 @@ class RoomAvailabilityApp(QMainWindow):
         self.timer.timeout.connect(self.update_status)
         self.timer.start(5000)  # 5 seconds
 
+        # Timer to check for day changes and refresh display daily
+        self.day_check_timer = QTimer()
+        self.day_check_timer.timeout.connect(self.check_day_change)
+        self.day_check_timer.start(60 * 60 * 1000)  # Check every hour
+
+        # Timer to refresh calendar data every 3 hours
+        self.refresh_timer = QTimer()
+        self.refresh_timer.timeout.connect(self.refresh_calendar_data)
+        self.refresh_timer.start(3 * 60 * 60 * 1000)  # 3 hours in milliseconds
+
         # Initial update
         self.update_status()
 
@@ -150,6 +160,11 @@ class RoomAvailabilityApp(QMainWindow):
         week_start = now - timedelta(days=days_until_sunday)
         return week_start.replace(hour=0, minute=0, second=0, microsecond=0)
 
+    def get_current_day_start(self):
+        """Return the start of the current day (today) at local midnight."""
+        now = datetime.now().astimezone(self.get_local_timezone())
+        return now.replace(hour=0, minute=0, second=0, microsecond=0)
+
     def get_week_start(self, dt):
         """Return the Sunday start of the given date/time in local timezone."""
         local_tz = self.get_local_timezone()
@@ -157,16 +172,6 @@ class RoomAvailabilityApp(QMainWindow):
         days_until_sunday = (dt_local.weekday() + 1) % 7
         week_start = dt_local - timedelta(days=days_until_sunday)
         return week_start.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    def get_display_week_start(self, events):
-        """Choose the week to display: current week if it has events, otherwise the earliest event week."""
-        current_start = self.get_current_week_start()
-        current_end = current_start + timedelta(days=7)
-        if any(self.event_in_range(event, current_start, current_end) for event in events):
-            return current_start
-        if events:
-            return self.get_week_start(min(events, key=lambda e: e.start).start)
-        return current_start
 
     def event_in_range(self, event, start, end):
         """Check whether an event falls within a given period."""
@@ -298,6 +303,106 @@ class RoomAvailabilityApp(QMainWindow):
         palette.setColor(QPalette.ColorRole.Window, color)
         self.status_label.setPalette(palette)
         self.status_label.setText(f"Status: {text}")
+
+    def refresh_calendar_data(self):
+        """Refresh calendar data by downloading from URL and updating the display."""
+        try:
+            # Get the ICS URL
+            ics_url = self.config_manager.get_ics_url()
+            if not ics_url:
+                print("No ICS URL configured, skipping refresh")
+                return
+
+            # Fetch new ICS data
+            print("Refreshing calendar data...")
+            ics_data = fetch_ics_from_url(ics_url)
+            
+            # Save to cache
+            self.config_manager.save_ics_file(ics_data)
+            
+            # Re-parse events
+            self.raw_events = parse_ics(ics_data)
+            self.events = self.expand_recurring_events(self.raw_events, self.week_start, self.week_end)
+            
+            # Update the display
+            self.update_calendar_display()
+            
+            print("Calendar data refreshed successfully")
+            
+        except Exception as e:
+            print(f"Error refreshing calendar data: {e}")
+            # Could show a message to the user, but for now just log it
+
+    def check_day_change(self):
+        """Check if the day has changed and update the display if needed."""
+        current_day_start = self.get_current_day_start()
+        if current_day_start != self.week_start:
+            print("Day has changed, updating display...")
+            # Update the week boundaries
+            self.week_start = current_day_start
+            self.week_end = self.week_start + timedelta(days=7)
+            
+            # Re-expand events for the new period
+            self.events = self.expand_recurring_events(self.raw_events, self.week_start, self.week_end)
+            
+            # Update the display
+            self.update_calendar_display()
+            
+            # Update the week label
+            self.week_label.setText(f"Showing 7 days starting {self.week_start.date()}")
+
+    def update_calendar_display(self):
+        """Update the calendar display with current events."""
+        # Clear existing day zones
+        for zone in self.day_zones:
+            zone.setParent(None)
+            zone.deleteLater()
+        
+        self.day_zones = []
+        
+        # Get the start of the current display period (today)
+        today = self.week_start
+        
+        # Get the days_layout from the main layout
+        main_layout = self.centralWidget().layout()
+        days_layout = main_layout.itemAt(1).layout()  # Second item is days_layout
+        
+        for i in range(7):
+            current_date = today + timedelta(days=i)
+            day_name = current_date.strftime('%A')  # Full day name (Monday, Tuesday, etc.)
+            day_label = f"{day_name}\n{current_date.strftime('%m/%d')}"
+            
+            zone = QFrame()
+            zone.setFrameStyle(QFrame.Shape.Box)
+            zone.setLineWidth(2)
+            zone.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+            zone_layout = QVBoxLayout(zone)
+            zone_layout.setContentsMargins(6, 6, 6, 6)
+            zone_layout.setSpacing(4)
+            zone_layout.addWidget(QLabel(f"<b>{day_label}</b>"))
+            
+            # Get real events for each day
+            day_events = self.get_events_for_day(current_date)
+            if day_events:
+                for event_text in day_events:
+                    event_label = QLabel(f"{event_text}")
+                    event_label.setWordWrap(True)
+                    event_label.setStyleSheet(
+                        "background-color: #0078d4;"
+                        "color: white;"
+                        "border: 1px solid #005a9e;"
+                        "border-radius: 10px;"
+                        "padding: 6px 8px;"
+                        "margin-bottom: 4px;"
+                    )
+                    zone_layout.addWidget(event_label)
+            else:
+                no_events_label = QLabel("No events")
+                no_events_label.setStyleSheet("color: gray; font-style: italic;")
+                zone_layout.addWidget(no_events_label)
+            
+            days_layout.addWidget(zone)
+            self.day_zones.append(zone)
     
     def remove_calendar_link(self):
         """Remove the calendar link and cached data."""

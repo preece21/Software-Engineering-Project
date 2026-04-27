@@ -10,7 +10,7 @@ When you launch the application for the first time, a setup page will appear pro
 
 **Where to find your ICS link:**
 - **Google Calendar**: Calendar settings → Integrate calendar → Copy the "Public ICS URL"
-- **Outlook/Microsoft**: Calendar sharing → Get sharing link (export as ICS)
+- **Outlook/Microsoft**: Settings → Calendar → Shared Calendars → Publish a Calendar
 - **Apple Calendar**: Export calendar → Copy the `.ics` file URL
 - **Any calendar app**: Export settings typically have an option to generate an ICS URL
 
