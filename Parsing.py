@@ -84,6 +84,7 @@ class Event:
     rrule: Optional[Dict[str, Any]] = None
     exdates: List[datetime] = field(default_factory=list)
     all_day: bool = False
+    exclusive: bool = False
 
     def __str__(self) -> str:
         """
@@ -225,6 +226,12 @@ def parse_ics(ics_data: bytes) -> List[Event]:
                     ex_dt, _ = normalize_datetime(dt.dt)
                     exdates_list.append(ex_dt)
 
+        # --- Room Reservation
+        if title.startswith("Reserved"):
+            exclusive = True
+        else:
+            exclusive - False
+        
         # Create normalized internal Event object
         event = Event(
             uid=uid,
@@ -236,6 +243,7 @@ def parse_ics(ics_data: bytes) -> List[Event]:
             rrule=rrule,
             exdates=exdates_list,
             all_day=all_day
+            exclusive = exclusive
         )
 
         events.append(event)
