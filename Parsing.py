@@ -26,6 +26,7 @@ from typing import Optional, List, Dict, Any
 import requests
 import pytz
 from icalendar import Calendar
+from dateutil.rrule import rrulestr
 
 
 # ---------------------------------------------------------------------------
@@ -157,6 +158,7 @@ def normalize_datetime(dt) -> (datetime, bool):
         raise ValueError("Unsupported datetime format encountered in ICS")
 
 
+
 # ---------------------------------------------------------------------------
 # ICS Parsing
 # ---------------------------------------------------------------------------
@@ -230,7 +232,7 @@ def parse_ics(ics_data: bytes) -> List[Event]:
         if title.startswith("Reserved"):
             exclusive = True
         else:
-            exclusive - False
+            exclusive = False
         
         # Create normalized internal Event object
         event = Event(
@@ -242,7 +244,7 @@ def parse_ics(ics_data: bytes) -> List[Event]:
             description=description,
             rrule=rrule,
             exdates=exdates_list,
-            all_day=all_day
+            all_day=all_day,
             exclusive = exclusive
         )
 
