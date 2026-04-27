@@ -2,7 +2,7 @@ import pytest
 from datetime import datetime, timedelta
 import pytz
 
-from Parsing.py import Event, expand_event
+from Parsing import Event, expand_event
 
 UTC = pytz.UTC
 
@@ -234,3 +234,9 @@ def test_uid_preserved():
 
       assert all(e.uid == "test-uid" for e in results)
       
+def main():
+    pass
+
+
+if __name__ == "__main__":
+    main()

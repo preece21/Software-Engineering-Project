@@ -1,0 +1,204 @@
+First Error Message:
+@preece21 ➜ /workspaces/Software-Engineering-Project (main) $ /workspaces/Software-Engineering-Project/.venv/bin/python /workspaces/Software-Engineering-Project/parser_test.py
+Traceback (most recent call last):
+  File "/workspaces/Software-Engineering-Project/parser_test.py", line 5, in <module>
+    from Parsing import Event, expand_event
+ImportError: cannot import name 'expand_event' from 'Parsing' (/workspaces/Software-Engineering-Project/Parsing.py)
+
+
+Implemented expand_event function that if an event isn't repeating, returns the event
+
+Second Error:
+/workspaces/Software-Engineering-Project/.venv/bin/python /workspaces/Software-Engineering-Project/parser_test.py
+Traceback (most recent call last):
+  File "/workspaces/Software-Engineering-Project/parser_test.py", line 252, in <module>
+    main()
+  File "/workspaces/Software-Engineering-Project/parser_test.py", line 240, in main
+    test_daily_recurrence_basic()
+  File "/workspaces/Software-Engineering-Project/parser_test.py", line 80, in test_daily_recurrence_basic
+    assert len(results) == 3
+AssertionError
+
+Added functionality to create and return multiple events
+
+Error Message:
+/workspaces/Software-Engineering-Project/.venv/bin/python /workspaces/Software-Engineering-Project/parser_test.py
+Traceback (most recent call last):
+  File "/workspaces/Software-Engineering-Project/parser_test.py", line 252, in <module>
+    main()
+  File "/workspaces/Software-Engineering-Project/parser_test.py", line 241, in main
+    test_recurrence_clipped_to_window()
+  File "/workspaces/Software-Engineering-Project/parser_test.py", line 100, in test_recurrence_clipped_to_window
+    assert len(results) == 3
+AssertionError
+
+Not: Was using pytest incorrectly and was running the parser_test.py file instead of running pytest
+
+===================================================================== test session starts =====================================================================
+platform linux -- Python 3.12.1, pytest-9.0.3, pluggy-1.6.0
+rootdir: /workspaces/Software-Engineering-Project
+plugins: anyio-4.12.1
+collected 11 items                                                                                                                                            
+
+parser_test.py ...FFFF....                                                                                                                              [100%]
+
+========================================================================== FAILURES ===========================================================================
+______________________________________________________________ test_recurrence_clipped_to_window ______________________________________________________________
+
+    def test_recurrence_clipped_to_window():
+        start = datetime(2026, 1, 1, 10, tzinfo=UTC)
+    
+        event = make_event(
+            start,
+            start + timedelta(hours=1),
+            rrule={"FREQ": ["DAILY"], "COUNT": [10]},
+        )
+    
+        results = expand_event(
+            event,
+            start_window=datetime(2026, 1, 3, tzinfo=UTC),
+            end_window=datetime(2026, 1, 5, tzinfo=UTC),
+        )
+    
+>       assert len(results) == 3
+E       AssertionError: assert 2 == 3
+E        +  where 2 = len([Event(uid='test-uid', title='Test Event', start=datetime.datetime(2026, 1, 3, 10, 0, tzinfo=<UTC>), end=datetime.date...>), location='', description='', rrule={'FREQ': ['DAILY'], 'COUNT': [10]}, exdates=[], all_day=False, exclusive=False)])
+
+parser_test.py:100: AssertionError
+_______________________________________________________________ test_exdate_removes_occurrence ________________________________________________________________
+
+    def test_exdate_removes_occurrence():
+        start = datetime(2026, 1, 1, 10, tzinfo=UTC)
+    
+        exdate = datetime(2026, 1, 3, 10, tzinfo=UTC)
+    
+        event = make_event(
+            start,
+            start + timedelta(hours=1),
+            rrule={"FREQ": ["DAILY"], "COUNT": [5]},
+            exdates=[exdate],
+        )
+    
+        results = expand_event(
+            event,
+            start_window=datetime(2026, 1, 1, tzinfo=UTC),
+            end_window=datetime(2026, 1, 10, tzinfo=UTC),
+        )
+    
+        starts = [e.start for e in results]
+    
+>       assert len(results) == 4
+E       AssertionError: assert 5 == 4
+E        +  where 5 = len([Event(uid='test-uid', title='Test Event', start=datetime.datetime(2026, 1, 1, 10, 0, tzinfo=<UTC>), end=datetime.date...'DAILY'], 'COUNT': [5]}, exdates=[datetime.datetime(2026, 1, 3, 10, 0, tzinfo=<UTC>)], all_day=False, exclusive=False)])
+
+parser_test.py:124: AssertionError
+___________________________________________________________________ test_weekly_recurrence ____________________________________________________________________
+
+    def test_weekly_recurrence():
+        start = datetime(2026, 1, 5, 10, tzinfo=UTC)  # Monday
+    
+        event = make_event(
+            start,
+            start + timedelta(hours=1),
+            rrule={"FREQ": ["WEEKLY"], "COUNT": [2]},
+        )
+    
+        results = expand_event(
+            event,
+            start_window=datetime(2026, 1, 1, tzinfo=UTC),
+            end_window=datetime(2026, 2, 1, tzinfo=UTC),
+        )
+    
+>       assert len(results) == 2
+E       assert 0 == 2
+E        +  where 0 = len([])
+
+parser_test.py:142: AssertionError
+______________________________________________________________________ test_rrule_until _______________________________________________________________________
+
+    def test_rrule_until():
+        start = datetime(2026, 1, 1, 10, tzinfo=UTC)
+    
+        event = make_event(
+            start,
+            start + timedelta(hours=1),
+            rrule={
+                "FREQ": ["DAILY"],
+                "UNTIL": [datetime(2026, 1, 3, 10, tzinfo=UTC)],
+            },
+        )
+    
+>       results = expand_event(
+            event,
+            start_window=datetime(2026, 1, 1, tzinfo=UTC),
+            end_window=datetime(2026, 1, 10, tzinfo=UTC),
+        )
+
+parser_test.py:157: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+event = Event(uid='test-uid', title='Test Event', start=datetime.datetime(2026, 1, 1, 10, 0, tzinfo=<UTC>), end=datetime.datet... ['DAILY'], 'UNTIL': [datetime.datetime(2026, 1, 3, 10, 0, tzinfo=<UTC>)]}, exdates=[], all_day=False, exclusive=False)
+start_window = datetime.datetime(2026, 1, 1, 0, 0, tzinfo=<UTC>), end_window = datetime.datetime(2026, 1, 10, 0, 0, tzinfo=<UTC>)
+
+    def expand_event(event: Event, start_window: datetime, end_window: datetime) -> List[Event]:
+        if event.rrule is None:
+            if (event.start > start_window and event.start < end_window):
+                return [event]
+            else:
+                return []
+        else:
+            rrule = event.rrule
+            events = []
+    
+>           if rrule["FREQ"][0].upper() == "DAILY" and rrule["COUNT"][0] is not None:
+                                                       ^^^^^^^^^^^^^^
+E           KeyError: 'COUNT'
+
+Parsing.py:270: KeyError
+=================================================================== short test summary info ===================================================================
+FAILED parser_test.py::test_recurrence_clipped_to_window - AssertionError: assert 2 == 3
+FAILED parser_test.py::test_exdate_removes_occurrence - AssertionError: assert 5 == 4
+FAILED parser_test.py::test_weekly_recurrence - assert 0 == 2
+FAILED parser_test.py::test_rrule_until - KeyError: 'COUNT'
+================================================================= 4 failed, 7 passed in 0.40s =================================================================
+
+Added handling for weekly occurance and until handling
+
+========================================================================== FAILURES ===========================================================================
+______________________________________________________________ test_recurrence_clipped_to_window ______________________________________________________________
+
+    def test_recurrence_clipped_to_window():
+        start = datetime(2026, 1, 1, 10, tzinfo=UTC)
+    
+        event = make_event(
+            start,
+            start + timedelta(hours=1),
+            rrule={"FREQ": ["DAILY"], "COUNT": [10]},
+        )
+    
+        results = expand_event(
+            event,
+            start_window=datetime(2026, 1, 3, tzinfo=UTC),
+            end_window=datetime(2026, 1, 5, tzinfo=UTC),
+        )
+    
+>       assert len(results) == 3
+E       AssertionError: assert 2 == 3
+E        +  where 2 = len([Event(uid='test-uid', title='Test Event', start=datetime.datetime(2026, 1, 3, 10, 0, tzinfo=<UTC>), end=datetime.date...>), location='', description='', rrule={'FREQ': ['DAILY'], 'COUNT': [10]}, exdates=[], all_day=False, exclusive=False)])
+
+parser_test.py:100: AssertionError
+=================================================================== short test summary info ===================================================================
+FAILED parser_test.py::test_recurrence_clipped_to_window - AssertionError: assert 2 == 3
+================================================================ 1 failed, 10 passed in 0.35s =================================================================
+
+Fixed exdate handling -> all tests passed
+
+===================================================================== test session starts =====================================================================
+platform linux -- Python 3.12.1, pytest-9.0.3, pluggy-1.6.0
+rootdir: /workspaces/Software-Engineering-Project
+plugins: anyio-4.12.1
+collected 11 items                                                                                                                                            
+
+parser_test.py ...........                                                                                                                              [100%]
+
+===================================================================== 11 passed in 0.26s ======================================================================

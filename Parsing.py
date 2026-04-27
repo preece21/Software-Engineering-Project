@@ -21,7 +21,7 @@ should never need to understand ICS syntax.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any
 import requests
 import pytz
@@ -251,3 +251,95 @@ def parse_ics(ics_data: bytes) -> List[Event]:
         events.append(event)
 
     return events
+
+
+#---------------------------------------------
+# Expand Events
+#---------------------------------------------
+
+def expand_event(event: Event, start_window: datetime, end_window: datetime) -> List[Event]:
+    # ---------------------------
+    # NON-RECURRING CASE
+    # ---------------------------
+    if event.rrule is None:
+        if start_window <= event.start <= end_window:
+            return [event]
+        return []
+
+    rrule = event.rrule or {}
+
+    frequency = rrule.get("FREQ", [None])[0]
+    if not frequency:
+        return []
+
+    frequency = frequency.upper()
+
+    count = rrule.get("COUNT", [None])[0]
+    until = rrule.get("UNTIL", [None])[0]
+
+    # ---------------------------
+    # DETERMINE STEP SIZE
+    # ---------------------------
+    if frequency == "DAILY":
+        delta = timedelta(days=1)
+    elif frequency == "WEEKLY":
+        delta = timedelta(weeks=1)
+    else:
+        return []
+
+    # ---------------------------
+    # GENERATE ALL CANDIDATES
+    # ---------------------------
+    i = 0
+    candidates = []
+
+    while True:
+        current_start = event.start + (delta * i)
+
+        # UNTIL stops generation
+        if until is not None and current_start > until:
+            break
+
+        # COUNT is based on recurrence index, not valid events
+        if count is not None and i >= count:
+            break
+
+        candidates.append(
+            Event(
+                uid=event.uid,
+                title=event.title,
+                start=current_start,
+                end=event.end + (delta * i) if event.end else None,
+                location=event.location,
+                description=event.description,
+                rrule=event.rrule,
+                exdates=event.exdates,
+                all_day=event.all_day,
+                exclusive=event.exclusive,
+            )
+        )
+
+        i += 1
+
+    # ---------------------------
+    # APPLY EXDATE FILTER
+    # ---------------------------
+    filtered = [
+        e for e in candidates
+        if not any(e.start == ex for ex in event.exdates)
+    ]
+
+    # ---------------------------
+    # APPLY WINDOW FILTER
+    # ---------------------------
+    return [
+        e for e in filtered
+        if start_window <= e.start < (end_window + timedelta(days=1))
+        ]
+
+
+def main():
+    pass
+
+if __name__ == "__main__":
+    main()
