@@ -1,6 +1,6 @@
 import sys
 from datetime import datetime, timedelta
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QPushButton, QMessageBox
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QPushButton, QMessageBox, QSizePolicy
 from PyQt6.QtCore import QTimer, QDateTime
 from PyQt6.QtGui import QPalette, QColor
 import random  # For simulating events
@@ -30,13 +30,15 @@ class RoomAvailabilityApp(QMainWindow):
 
         # Main layout
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(8, 8, 8, 8)
-        main_layout.setSpacing(6)
+        main_layout.setContentsMargins(4, 2, 4, 6)
+        main_layout.setSpacing(2)
 
         # Top row: week label only
         top_layout = QHBoxLayout()
+        top_layout.setContentsMargins(0, 0, 0, 0)
+        top_layout.setSpacing(2)
         self.week_label = QLabel(f"Showing week starting {self.week_start.date()}")
-        self.week_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self.week_label.setStyleSheet("font-weight: bold; font-size: 12px; margin-bottom: 0px;")
         top_layout.addWidget(self.week_label)
         top_layout.addStretch()
         main_layout.addLayout(top_layout)
@@ -44,12 +46,13 @@ class RoomAvailabilityApp(QMainWindow):
         # Day zones layout
         days_layout = QHBoxLayout()
         days_layout.setSpacing(4)
-        main_layout.addLayout(days_layout)
+        main_layout.addLayout(days_layout, 1)
 
         # Status section
         self.status_label = QLabel("Status: Checking...")
-        self.status_label.setMinimumHeight(50)
-        self.status_label.setMaximumHeight(150)
+        self.status_label.setMinimumHeight(200)
+        self.status_label.setMaximumHeight(300)
+        self.status_label.setStyleSheet("padding: 2px; font-size: 12px;")
         self.status_label.setAutoFillBackground(True)
         main_layout.addWidget(self.status_label)
 
@@ -67,6 +70,7 @@ class RoomAvailabilityApp(QMainWindow):
             zone = QFrame()
             zone.setFrameStyle(QFrame.Shape.Box)
             zone.setLineWidth(2)
+            zone.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
             zone_layout = QVBoxLayout(zone)
             zone_layout.setContentsMargins(6, 6, 6, 6)
             zone_layout.setSpacing(4)
@@ -76,8 +80,16 @@ class RoomAvailabilityApp(QMainWindow):
             day_events = self.get_events_for_day(current_date)
             if day_events:
                 for event_text in day_events:
-                    event_label = QLabel(f"• {event_text}")
+                    event_label = QLabel(f"{event_text}")
                     event_label.setWordWrap(True)
+                    event_label.setStyleSheet(
+                        "background-color: #0078d4;"
+                        "color: white;"
+                        "border: 1px solid #005a9e;"
+                        "border-radius: 10px;"
+                        "padding: 6px 8px;"
+                        "margin-bottom: 4px;"
+                    )
                     zone_layout.addWidget(event_label)
             else:
                 no_events_label = QLabel("No events")
@@ -238,7 +250,12 @@ class RoomAvailabilityApp(QMainWindow):
                     day_events.append(f"{event.title} (All Day)")
                 else:
                     start_time = event.start.astimezone(local_tz).strftime("%I:%M %p")
-                    day_events.append(f"{event.title} ({start_time})")
+                    end_time = (event.end.astimezone(local_tz).strftime("%I:%M %p")
+                                if event.end else "")
+                    if end_time:
+                        day_events.append(f"{start_time} - {end_time}: {event.title}")
+                    else:
+                        day_events.append(f"{start_time}: {event.title}")
         
         return day_events
 
