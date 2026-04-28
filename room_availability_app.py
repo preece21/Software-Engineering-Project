@@ -1,7 +1,7 @@
 import sys
 from datetime import datetime, timedelta
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QPushButton, QMessageBox, QSizePolicy
-from PyQt6.QtCore import QTimer, QDateTime
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QPushButton, QMessageBox, QSizePolicy, QScrollArea
+from PyQt6.QtCore import QTimer, QDateTime, Qt
 from PyQt6.QtGui import QPalette, QColor
 import random  # For simulating events
 import pytz  # For timezone handling
@@ -9,7 +9,7 @@ from dateutil.rrule import rrulestr, rruleset
 
 from config_manager import ConfigManager
 from setup_page import SetupPage
-from Parsing import parse_ics, Event, fetch_ics_from_url
+from Parsing import parse_ics, Event, fetch_ics_from_url, parse_from_calendar
 
 class RoomAvailabilityApp(QMainWindow):
     def __init__(self):
@@ -19,10 +19,9 @@ class RoomAvailabilityApp(QMainWindow):
 
         # Load calendar data
         self.config_manager = ConfigManager()
-        self.raw_events = self.parse_calendar_events()
         self.week_start = self.get_current_day_start()
         self.week_end = self.week_start + timedelta(days=7)
-        self.events = self.expand_recurring_events(self.raw_events, self.week_start, self.week_end)
+        self.events = self.parse_calendar_events()
 
         # Central widget
         central_widget = QWidget()
@@ -43,10 +42,21 @@ class RoomAvailabilityApp(QMainWindow):
         top_layout.addStretch()
         main_layout.addLayout(top_layout)
 
-        # Day zones layout
+        # Day zones layout with horizontal scrolling so all 7 days can be seen
         days_layout = QHBoxLayout()
         days_layout.setSpacing(4)
-        main_layout.addLayout(days_layout, 1)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.setMinimumHeight(420)
+
+        scroll_container = QWidget()
+        scroll_container.setLayout(days_layout)
+        scroll_area.setWidget(scroll_container)
+
+        main_layout.addWidget(scroll_area, 1)
 
         # Status section
         self.status_label = QLabel("Status: Checking...")
@@ -131,22 +141,20 @@ class RoomAvailabilityApp(QMainWindow):
         self.update_status()
 
     def parse_calendar_events(self):
-        """Parse the cached ICS file and return raw Event objects."""
+        """Parse the calendar from URL and return expanded Event objects."""
         try:
-            cached_ics = self.config_manager.get_cached_ics()
-            if cached_ics:
-                return parse_ics(cached_ics)
+            ics_url = self.config_manager.get_ics_url()
+            if ics_url:
+                ics_data = fetch_ics_from_url(ics_url)
+                raw_events = parse_ics(ics_data)
+                # Use expand_recurring_events (dateutil-backed) so that BYDAY rules
+                # like MO,WE,FR are correctly expanded — the custom expand_event in
+                # Parsing.py only handles simple DAILY/WEEKLY and ignores BYDAY.
+                expanded = self.expand_recurring_events(raw_events, self.week_start, self.week_end)
+                return sorted(expanded, key=lambda e: e.start)
             return []
         except Exception as e:
             print(f"Error parsing calendar: {e}")
-            return []
-
-    def load_calendar_events(self):
-        """Load events for the selected week by expanding recurring rules."""
-        try:
-            return self.expand_recurring_events(self.raw_events, self.week_start, self.week_end)
-        except Exception as e:
-            print(f"Error loading calendar: {e}")
             return []
 
     def get_local_timezone(self):
@@ -250,19 +258,24 @@ class RoomAvailabilityApp(QMainWindow):
                 event_date = event.start.astimezone(local_tz).date()
 
             if event_date == target_date:
-                # Format event time and title
-                if event.all_day:
-                    day_events.append(f"{event.title} (All Day)")
+                day_events.append(event)
+
+        day_events.sort(key=lambda e: e.start)
+
+        formatted_events = []
+        for event in day_events:
+            if event.all_day:
+                formatted_events.append(f"{event.title} (All Day)")
+            else:
+                start_time = event.start.astimezone(local_tz).strftime("%I:%M %p")
+                end_time = (event.end.astimezone(local_tz).strftime("%I:%M %p")
+                            if event.end else "")
+                if end_time:
+                    formatted_events.append(f"{start_time} - {end_time}: {event.title}")
                 else:
-                    start_time = event.start.astimezone(local_tz).strftime("%I:%M %p")
-                    end_time = (event.end.astimezone(local_tz).strftime("%I:%M %p")
-                                if event.end else "")
-                    if end_time:
-                        day_events.append(f"{start_time} - {end_time}: {event.title}")
-                    else:
-                        day_events.append(f"{start_time}: {event.title}")
-        
-        return day_events
+                    formatted_events.append(f"{start_time}: {event.title}")
+
+        return formatted_events
 
     def simulate_events(self):
         # Simulate some events for demonstration
@@ -321,8 +334,10 @@ class RoomAvailabilityApp(QMainWindow):
             self.config_manager.save_ics_file(ics_data)
             
             # Re-parse events
-            self.raw_events = parse_ics(ics_data)
-            self.events = self.expand_recurring_events(self.raw_events, self.week_start, self.week_end)
+            ics_data = fetch_ics_from_url(ics_url)
+            raw_events = parse_ics(ics_data)
+            self.events = self.expand_recurring_events(raw_events, self.week_start, self.week_end)
+            self.events = sorted(self.events, key=lambda e: e.start)
             
             # Update the display
             self.update_calendar_display()
@@ -342,8 +357,8 @@ class RoomAvailabilityApp(QMainWindow):
             self.week_start = current_day_start
             self.week_end = self.week_start + timedelta(days=7)
             
-            # Re-expand events for the new period
-            self.events = self.expand_recurring_events(self.raw_events, self.week_start, self.week_end)
+            # Re-parse events for the new period
+            self.events = self.parse_calendar_events()
             
             # Update the display
             self.update_calendar_display()
@@ -363,9 +378,10 @@ class RoomAvailabilityApp(QMainWindow):
         # Get the start of the current display period (today)
         today = self.week_start
         
-        # Get the days_layout from the main layout
+        # Get the days_layout from the scroll area
         main_layout = self.centralWidget().layout()
-        days_layout = main_layout.itemAt(1).layout()  # Second item is days_layout
+        scroll_area = main_layout.itemAt(1).widget()
+        days_layout = scroll_area.widget().layout()
         
         for i in range(7):
             current_date = today + timedelta(days=i)

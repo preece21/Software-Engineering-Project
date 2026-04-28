@@ -212,7 +212,9 @@ def parse_ics(ics_data: bytes) -> List[Event]:
 
         # --- Recurrence Rule (RRULE) ---
         rrule_component = component.get("RRULE")
-        rrule = dict(rrule_component) if rrule_component else None
+        # Store as raw RFC 5545 string so dateutil.rrulestr gets proper formatting
+        # (handles BYDAY weekday names, UNTIL timestamps, WKST, etc.)
+        rrule = rrule_component.to_ical().decode("utf-8") if rrule_component else None
 
         # --- Exception Dates (EXDATE) ---
         exdates_list: List[datetime] = []
@@ -265,6 +267,33 @@ def expand_event(event: Event, start_window: datetime, end_window: datetime) -> 
         if start_window <= event.start <= end_window:
             return [event]
         return []
+
+    # ---------------------------
+    # STRING RRULE — use dateutil for full RFC 5545 support (BYDAY, WKST, etc.)
+    # Real ICS files store the rrule as a string via to_ical(); tests pass dicts.
+    # ---------------------------
+    if isinstance(event.rrule, str):
+        from dateutil.rrule import rrulestr, rruleset as RRuleSet
+        rules = RRuleSet()
+        rules.rrule(rrulestr(event.rrule, dtstart=event.start, ignoretz=False))
+        for ex in event.exdates:
+            rules.exdate(ex)
+        duration = (event.end - event.start) if event.end else None
+        results = []
+        for occ in rules.between(start_window, end_window + timedelta(days=1), inc=True):
+            results.append(Event(
+                uid=event.uid,
+                title=event.title,
+                start=occ,
+                end=occ + duration if duration else None,
+                location=event.location,
+                description=event.description,
+                rrule=event.rrule,
+                exdates=event.exdates,
+                all_day=event.all_day,
+                exclusive=event.exclusive,
+            ))
+        return results
 
     rrule = event.rrule or {}
 
@@ -346,7 +375,7 @@ def parse_from_calendar(url: str, start_window: datetime, end_window: datetime) 
 
     for event in first_pass_events:
         recurring_event = expand_event(event, start_window, end_window)
-        second_pass_events.append(recurring_event)
+        second_pass_events.extend(recurring_event)
     
     return second_pass_events
 
