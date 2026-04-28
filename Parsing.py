@@ -338,6 +338,18 @@ def expand_event(event: Event, start_window: datetime, end_window: datetime) -> 
         ]
 
 
+def parse_from_calendar(url: str, start_window: datetime, end_window: datetime) -> List[Event]:
+    bytes = fetch_ics_from_url(url)
+    first_pass_events = parse_ics(bytes)
+
+    second_pass_events = []
+
+    for event in first_pass_events:
+        recurring_event = expand_event(event, start_window, end_window)
+        second_pass_events.append(recurring_event)
+    
+    return second_pass_events
+
 def main():
     pass
 
